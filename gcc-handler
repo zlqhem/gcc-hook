@@ -1,0 +1,7 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use Cwd qw/ getcwd abs_path /;
+
+print STDOUT "[RECEIVED] @ARGV";
