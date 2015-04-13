@@ -6,17 +6,77 @@ use FindBin qw($RealBin);
 use Cwd qw/ getcwd abs_path /;
 
 my $AbsRealBin = Cwd::realpath($RealBin);
-my $CCAnalyzer = "$AbsRealBin/gcc-handler";
-my $CXXAnalyzer = "$AbsRealBin/g++-handler";
+
+# FIXME: parameterize handler instead of fixed one
+my $CCAnalyzer = "$AbsRealBin/ccc-print-handler";
+my $CXXAnalyzer = "$AbsRealBin/cxx-print-handler";
+my %Options = (
+	'CC' => $CCAnalyzer,
+	'CXX' => $CXXAnalyzer
+);
+
+sub SetEnv {
+	my $Options = shift @_;
+
+	foreach my $key (keys $Options) {
+		$ENV{$key} = $Options->{$key};
+	}
+}
 
 sub RunBuildCommand {
 	my $Args = shift;
+	my $Options = shift;
+
+	SetEnv ($Options);
 	push @$Args, "CC=$CCAnalyzer";
 	push @$Args, "CXX=$CXXAnalyzer";
-	print STDOUT "> @$Args";
+	print STDOUT "\n> @$Args\n";
 	return (system(@$Args) >> 8);
 }
 
-my $ExitStatus = RunBuildCommand(\@ARGV);
+while (@ARGV) {
+	my $arg = $ARGV[0];
+	if ($arg =~ /^--use-cc(=(.+))?$/) {
+		shift @ARGV;
+		my $cc;
+
+		if (!defined $2 || $2 eq "") {
+			if (!@ARGV) {
+				DieDiag("'--use-cc' option requires a compiler executable name.\n");
+			}
+			$cc = shift @ARGV;
+		}
+		else {
+			$cc = $2;
+		}
+
+		$ENV{"CCC_CC"} = $cc;
+		next;
+	}
+
+	if ($arg =~ /^--use-c\+\+(=(.+))?$/) {
+		shift @ARGV;
+		my $cxx;
+
+		if (!defined $2 || $2 eq "") {
+			if (!@ARGV) {
+				DieDiag("'--use-c++' option requires a compiler executable name.\n");
+			}
+			$cxx = shift @ARGV;
+		}
+		else {
+			$cxx = $2;
+		}
+
+		$ENV{"CCC_CXX"} = $cxx;
+		next;
+	}
+
+	DieDiag("unrecognized option '$arg'\n") if ($arg =~ /^-/);
+
+	last;
+}
+
+my $ExitStatus = RunBuildCommand(\@ARGV, \%Options);
 exit $ExitStatus;
 

@@ -1,0 +1,102 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use FindBin;
+use Cwd qw/ getcwd abs_path /;
+
+my @IncludePathOpts;
+my @MacroDefOpts;
+my @Files;
+my $Compiler;
+my $DefaultCCompiler = 'gcc';
+my $DefaultCXXCompiler = 'g++';
+
+my $IsCXX;
+
+##===----------------------------------------------------------------------===##
+# Compiler command setup.
+##===----------------------------------------------------------------------===##
+
+# Search in the PATH if the compiler exists
+sub SearchInPath {
+    my $file = shift;
+    foreach my $dir (split (':', $ENV{PATH})) {
+        if (-x "$dir/$file") {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+if ($FindBin::Script =~ /c\+\+-print-analyzer/) {
+	$Compiler = $ENV{'CCC_CXX'};
+	if (!defined $Compiler || (! -x $Compiler && ! SearchInPath($Compiler))) { $Compiler = $DefaultCXXCompiler; }
+
+	$IsCXX = 1
+}
+else {
+	$Compiler = $ENV{'CCC_CC'};
+	if (!defined $Compiler || (! -x $Compiler && ! SearchInPath($Compiler))) { $Compiler = $DefaultCCompiler; }
+
+	$IsCXX = 0
+}
+
+print STDOUT "Compiler: $Compiler\n";
+
+##----------------------------------------------------------------------------##
+#  Main Logic.
+##----------------------------------------------------------------------------##
+
+
+my $Status = system($Compiler,@ARGV);
+print STDOUT ">> @ARGV";
+if ($Status) { exit($Status >> 8); }
+
+# Process the arguments.
+foreach (my $i = 0; $i < scalar(@ARGV); ++$i) {
+	my $Arg = $ARGV[$i];
+
+	# Include path
+	if ($Arg =~ /^-I(.*)$/) {
+		my $Tmp = $Arg;
+		if ($1 eq '') {
+			# FIXME: Check if we are going off the end.
+			++$i;
+			$Tmp = $Arg . $ARGV[$i];
+		}
+		push @IncludePathOpts,$Tmp;
+		next;
+	}
+
+	# Macro def
+	if ($Arg =~ /^-D(.*)$/) {
+		my $Tmp = $Arg;
+		if ($1 eq '') {
+			# FIXME: Check if we are going off the end.
+			++$i;
+			$Tmp = $Arg . $ARGV[$i];
+		}
+		push @MacroDefOpts,$Tmp;
+		next;
+	}
+
+	if ($Arg eq '-filelist') {
+		open(IN, $ARGV[$i+1]);
+		while (<IN>) { s/\015?\012//; push @Files,$_; }
+		close(IN);
+		++$i;
+		next;
+	}
+
+	if (!($Arg =~ /^-/)) {
+		push @Files, $Arg;
+		next;
+	}
+}
+
+foreach my $file (@Files) {
+	print STDOUT "$file: \n";
+	print STDOUT "\t[INCLUDE_PATH] @IncludePathOpts\n";
+	print STDOUT "\t[MACRO_DEF] @MacroDefOpts\n";
+}
